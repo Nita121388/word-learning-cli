@@ -67,7 +67,7 @@ const program = new Command();
 program
   .name("wordcli")
   .description("Local-first vocabulary learning CLI for AI agents and Obsidian")
-  .version("0.1.3")
+  .version("0.1.4")
   .option("--vault <path>", "Obsidian vault path")
   .option("--db <path>", "SQLite database path")
   .option("--review-algorithm <algorithm>", "simple_v1 | fsrs_v1")

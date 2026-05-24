@@ -65,7 +65,7 @@ export function isNodeSqliteAvailable(): boolean {
 
 function loadDatabaseSync(): DatabaseSyncConstructor {
   try {
-    const require = createRequire(import.meta.url);
+    const require = createRequire(process.execPath);
     const sqlite = require("node:sqlite") as { DatabaseSync?: DatabaseSyncConstructor };
     if (!sqlite.DatabaseSync) {
       throw new Error("DatabaseSync export not found");

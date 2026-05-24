@@ -1,4 +1,5 @@
 import { mkdtempSync, rmSync } from "node:fs";
+import { writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -52,5 +53,31 @@ describe("WordLearning", () => {
     expect(graph.morphemes).toHaveLength(1);
     app.close();
   });
-});
 
+  it("imports ECDICT and saves lookup results", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "word-learning-"));
+    dirs.push(dir);
+    const csv = join(dir, "ecdict.csv");
+    writeFileSync(
+      csv,
+      [
+        "word,phonetic,definition,translation,pos,collins,oxford,tag,bnc,frq,exchange,detail,audio",
+        "precise,prɪˈsaɪs,exact and accurate,精确的,adj,1,1,ielts,1000,1000,precisely,demo,"
+      ].join("\n"),
+      "utf8"
+    );
+    const app = new WordLearning({
+      dbPath: join(dir, "user.sqlite"),
+      dictionaryDbPath: join(dir, "ecdict.sqlite")
+    });
+
+    const imported = await app.importEcdict(csv);
+    const lookup = app.lookupWord("precise", { save: true });
+
+    expect(imported.imported).toBe(1);
+    expect(lookup.entries[0]?.translation).toBe("精确的");
+    expect(lookup.savedWord?.meaningZh).toBe("精确的");
+    expect(lookup.savedWord?.tags).toContain("ielts");
+    app.close();
+  });
+});

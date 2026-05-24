@@ -3,9 +3,12 @@ import { dirname, join } from "node:path";
 import type { SqliteAdapter } from "./db/adapter.js";
 import { schemaSql } from "./db/schema.js";
 import { NodeSqliteAdapter } from "./db/node-sqlite.js";
+import { EcdictDictionary, type EcdictImportResult } from "./dictionary/ecdict.js";
 import type {
+  DictionaryEntry,
   DueWord,
   EntityGraph,
+  LookupResult,
   MorphemeInput,
   Rating,
   ReviewResult,
@@ -52,22 +55,28 @@ interface ScheduleRow {
 export interface WordLearningOptions {
   dbPath?: string;
   vaultPath?: string;
+  dictionaryDbPath?: string;
   adapter?: SqliteAdapter;
+  dictionaryAdapter?: SqliteAdapter;
 }
 
 export class WordLearning {
   private readonly adapter: SqliteAdapter;
+  private readonly dictionaryAdapter: SqliteAdapter;
   private readonly baseDir: string;
 
   constructor(options: WordLearningOptions) {
     if (options.adapter) {
       this.adapter = options.adapter;
+      this.dictionaryAdapter = options.dictionaryAdapter ?? options.adapter;
       this.baseDir = process.cwd();
       return;
     }
     const dbPath = options.dbPath ?? (options.vaultPath ? resolveVaultDbPath(options.vaultPath) : join(process.cwd(), ".word-learning", "user.sqlite"));
     this.baseDir = dirname(dbPath);
     this.adapter = new NodeSqliteAdapter(dbPath);
+    const dictionaryDbPath = options.dictionaryDbPath ?? join(this.baseDir, "dictionaries", "ecdict.sqlite");
+    this.dictionaryAdapter = options.dictionaryAdapter ?? new NodeSqliteAdapter(dictionaryDbPath);
   }
 
   init(): void {
@@ -79,6 +88,9 @@ export class WordLearning {
 
   close(): void {
     this.adapter.close();
+    if (this.dictionaryAdapter !== this.adapter) {
+      this.dictionaryAdapter.close();
+    }
   }
 
   addWord(input: WordInput): WordDetail {
@@ -265,6 +277,26 @@ export class WordLearning {
     copyFileSync(join(this.baseDir, "user.sqlite"), backupPath);
     this.writeOp("backup.create", "backup", createId("backup"), { backupPath });
     return backupPath;
+  }
+
+  async importEcdict(filePath: string): Promise<EcdictImportResult> {
+    const dictionary = new EcdictDictionary(this.dictionaryAdapter);
+    const result = await dictionary.importCsv(filePath);
+    this.init();
+    this.writeOp("dictionary.import_ecdict", "dictionary", createId("dictionary"), { filePath, ...result });
+    return result;
+  }
+
+  lookupWord(word: string, options: { save?: boolean } = {}): LookupResult {
+    this.init();
+    const dictionary = new EcdictDictionary(this.dictionaryAdapter);
+    const entries = dictionary.lookup(word);
+    const savedWord = options.save && entries[0] ? this.saveDictionaryEntry(entries[0]) : undefined;
+    const result: LookupResult = { word, entries };
+    if (savedWord) {
+      result.savedWord = savedWord;
+    }
+    return result;
   }
 
   getDueWords(options: { now?: Date; limit?: number; tag?: string } = {}): DueWord[] {
@@ -592,6 +624,44 @@ export class WordLearning {
   private appendJsonl(name: string, value: unknown): void {
     mkdirSync(this.baseDir, { recursive: true });
     appendFileSync(join(this.baseDir, name), `${JSON.stringify(value)}\n`, "utf8");
+  }
+
+  private saveDictionaryEntry(entry: DictionaryEntry): WordDetail {
+    const input: WordInput = {
+      word: entry.word,
+      source: entry.provider,
+      tags: entry.tags
+    };
+    if (entry.translation) input.meaningZh = entry.translation;
+    if (entry.definition) input.meaningEn = entry.definition;
+    if (entry.phonetic) input.phonetic = entry.phonetic;
+    if (entry.pos) input.partOfSpeech = entry.pos;
+    const detail = this.addWord(input);
+    this.recordFieldSource(detail.id, "meaning_zh", entry.provider, entry.translation, entry);
+    this.recordFieldSource(detail.id, "meaning_en", entry.provider, entry.definition, entry);
+    this.recordFieldSource(detail.id, "phonetic", entry.provider, entry.phonetic, entry);
+    this.recordFieldSource(detail.id, "part_of_speech", entry.provider, entry.pos, entry);
+    return detail;
+  }
+
+  private recordFieldSource(wordId: string, fieldName: string, provider: string, value: string | null, raw: unknown): void {
+    if (!value) {
+      return;
+    }
+    this.adapter.prepare(
+      `INSERT INTO word_sources (id, word_id, provider, field_name, value_hash, license, url, raw_json, fetched_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).run(
+      createId("source"),
+      wordId,
+      provider,
+      fieldName,
+      String(value.length),
+      provider === "ecdict" ? "MIT" : null,
+      null,
+      JSON.stringify(raw),
+      nowIso()
+    );
   }
 
   private detectImportFormat(filePath: string): "json" | "csv" | "tsv" {

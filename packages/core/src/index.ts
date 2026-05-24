@@ -1,8 +1,10 @@
 export { WordLearning } from "./word-learning.js";
 export type {
   ApiResponse,
+  DictionaryEntry,
   DueWord,
   EntityGraph,
+  LookupResult,
   MorphemeInput,
   MorphemeType,
   Rating,
@@ -15,4 +17,3 @@ export type {
 } from "./types.js";
 export { ok, fail } from "./json-api.js";
 export { resolveVaultDbPath } from "./utils.js";
-

@@ -92,7 +92,25 @@ export interface EntityGraph {
   relations: Array<Record<string, unknown>>;
 }
 
+export interface DictionaryEntry {
+  word: string;
+  normalizedWord: string;
+  phonetic: string | null;
+  definition: string | null;
+  translation: string | null;
+  pos: string | null;
+  tags: string[];
+  exchange: string | null;
+  provider: string;
+  source: string | null;
+}
+
+export interface LookupResult {
+  word: string;
+  entries: DictionaryEntry[];
+  savedWord?: WordDetail;
+}
+
 export type ApiResponse<T> =
   | { ok: true; data: T; meta?: Record<string, unknown> }
   | { ok: false; error: { code: string; message: string; details?: unknown } };
-

@@ -125,6 +125,23 @@ program
   });
 
 program
+  .command("lookup")
+  .argument("<word>")
+  .description("look up a word in configured dictionary sources")
+  .option("--save", "save the first dictionary result into the learning database")
+  .action((word: string, commandOptions: { save?: boolean }) => {
+    const options = program.opts<GlobalOptions>();
+    try {
+      const app = createApp(options);
+      const result = app.lookupWord(word, { save: commandOptions.save === true });
+      app.close();
+      printResult(result, options.json);
+    } catch (error) {
+      handleError(error, options.json);
+    }
+  });
+
+program
   .command("update")
   .argument("<word>")
   .description("update word fields")
@@ -237,6 +254,24 @@ review
     try {
       const app = createApp(options);
       const result = app.getDueWords(withDefined({ limit: commandOptions.limit, tag: commandOptions.tag }));
+      app.close();
+      printResult(result, options.json);
+    } catch (error) {
+      handleError(error, options.json);
+    }
+  });
+
+const dictionary = program.command("dictionary").description("manage local dictionary sources");
+
+dictionary
+  .command("import-ecdict")
+  .argument("<csv>")
+  .description("import ECDICT CSV into the local dictionary database")
+  .action(async (csv: string) => {
+    const options = program.opts<GlobalOptions>();
+    try {
+      const app = createApp(options);
+      const result = await app.importEcdict(csv);
       app.close();
       printResult(result, options.json);
     } catch (error) {

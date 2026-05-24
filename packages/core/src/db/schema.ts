@@ -160,3 +160,23 @@ CREATE INDEX IF NOT EXISTS idx_relations_from ON relations(from_type, from_id);
 CREATE INDEX IF NOT EXISTS idx_relations_to ON relations(to_type, to_id);
 `;
 
+export const ecdictSchemaSql = `
+CREATE TABLE IF NOT EXISTS ecdict_entries (
+  word TEXT PRIMARY KEY,
+  normalized_word TEXT NOT NULL UNIQUE,
+  phonetic TEXT,
+  definition TEXT,
+  translation TEXT,
+  pos TEXT,
+  collins INTEGER,
+  oxford INTEGER,
+  tag TEXT,
+  bnc INTEGER,
+  frq INTEGER,
+  exchange TEXT,
+  detail TEXT,
+  audio TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_ecdict_normalized_word ON ecdict_entries(normalized_word);
+`;

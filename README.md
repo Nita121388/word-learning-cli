@@ -27,3 +27,19 @@ wordcli add precise --meaning-zh "精确的" --tag writing --vault ~/Documents/M
 wordcli review due --vault ~/Documents/MyVault --json
 ```
 
+## Dictionary Lookup
+
+Import a local ECDICT CSV file into the dictionary cache:
+
+```bash
+wordcli --vault ~/Documents/MyVault dictionary import-ecdict /path/to/ecdict.csv
+```
+
+Look up a word and save the first dictionary result into the learning database:
+
+```bash
+wordcli --vault ~/Documents/MyVault --json lookup precise --save
+```
+
+Saved dictionary fields are recorded in `word_sources` so generated or imported content can be traced back to a provider.
+

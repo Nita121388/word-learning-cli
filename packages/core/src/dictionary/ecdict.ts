@@ -82,6 +82,8 @@ export class EcdictDictionary {
       pos: nullableString(row.pos),
       tags: nullableString(row.tag)?.split(/\s+/).filter(Boolean) ?? [],
       exchange: nullableString(row.exchange),
+      example: null,
+      audioUrl: nullableString(row.audio),
       provider: "ecdict",
       source: "ecdict"
     }));

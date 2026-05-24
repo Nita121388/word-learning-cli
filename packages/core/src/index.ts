@@ -1,4 +1,4 @@
-export { WordLearning } from "./word-learning.js";
+export { WordLearning, type LookupSource } from "./word-learning.js";
 export type {
   ApiResponse,
   DictionaryEntry,

@@ -45,7 +45,15 @@ Dictionary:
 wordcli dictionary import-ecdict /path/to/ecdict.csv
 wordcli lookup precise
 wordcli lookup precise --save
+wordcli lookup hello --source free-dictionary
+wordcli lookup hello --source all --save
 ```
+
+Lookup sources:
+
+- `ecdict`: local ECDICT cache.
+- `free-dictionary`: online Free Dictionary API.
+- `all`: local ECDICT followed by Free Dictionary API.
 
 Obsidian plugin package:
 

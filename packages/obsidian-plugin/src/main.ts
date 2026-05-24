@@ -1,5 +1,5 @@
 import { ItemView, Notice, Plugin, PluginSettingTab, Setting, WorkspaceLeaf } from "obsidian";
-import { WordLearning, resolveVaultDbPath, type DueWord, type LookupResult, type Rating, type WordDetail, type WordSource } from "@word-learning/core";
+import { WordLearning, resolveVaultDbPath, type DueWord, type LookupResult, type LookupSource, type Rating, type WordDetail, type WordSource } from "@word-learning/core";
 
 const VIEW_TYPE = "word-learning-view";
 
@@ -7,6 +7,7 @@ interface WordLearningSettings {
   databasePath: string;
   dictionaryDatabasePath: string;
   ecdictCsvPath: string;
+  lookupSource: LookupSource;
   defaultTags: string;
   autoSaveLookup: boolean;
   reviewLimit: number;
@@ -16,6 +17,7 @@ const defaultSettings: WordLearningSettings = {
   databasePath: ".word-learning/user.sqlite",
   dictionaryDatabasePath: ".word-learning/dictionaries/ecdict.sqlite",
   ecdictCsvPath: "",
+  lookupSource: "ecdict",
   defaultTags: "",
   autoSaveLookup: false,
   reviewLimit: 10
@@ -205,11 +207,19 @@ class WordLearningView extends ItemView {
     this.render();
   }
 
-  lookup(rawWord: string): void {
+  async lookup(rawWord: string): Promise<void> {
     const word = normalizeInput(rawWord);
     if (!word) return;
     const app = this.plugin.createCore();
-    this.currentLookup = app.lookupWord(word, { save: this.plugin.settings.autoSaveLookup });
+    try {
+      this.currentLookup = await app.lookupWord(word, {
+        save: this.plugin.settings.autoSaveLookup,
+        source: this.plugin.settings.lookupSource
+      });
+    } catch (error) {
+      new Notice(error instanceof Error ? error.message : String(error));
+      this.currentLookup = { word, entries: [], source: this.plugin.settings.lookupSource };
+    }
     this.currentWord = app.getWord(word);
     this.currentSources = this.currentWord ? app.getWordSources(word) : [];
     this.due = app.getDueWords({ limit: this.plugin.settings.reviewLimit });
@@ -251,10 +261,12 @@ class WordLearningView extends ItemView {
       }
     });
     const button = wrapper.createEl("button", { text: "Lookup" });
-    button.addEventListener("click", () => this.lookup(input.value));
+    button.addEventListener("click", () => {
+      void this.lookup(input.value);
+    });
     input.addEventListener("keydown", (event) => {
       if (event.key === "Enter") {
-        this.lookup(input.value);
+        void this.lookup(input.value);
       }
     });
   }
@@ -281,13 +293,28 @@ class WordLearningView extends ItemView {
     list.createEl("li", { text: `音标：${entry.phonetic ?? "未提供"}` });
     list.createEl("li", { text: `词性：${entry.pos ?? "未提供"}` });
     list.createEl("li", { text: `来源：${entry.provider}` });
+    if (entry.example) {
+      list.createEl("li", { text: `例句：${entry.example}` });
+    }
 
     const controls = section.createDiv({ cls: "word-learning-actions" });
+    if (entry.audioUrl) {
+      const play = controls.createEl("button", { text: "Play" });
+      play.addEventListener("click", () => {
+        new Audio(entry.audioUrl ?? "").play().catch((error: unknown) => {
+          new Notice(error instanceof Error ? error.message : String(error));
+        });
+      });
+    }
+
     const save = controls.createEl("button", { text: this.currentWord ? "Saved" : "Save" });
     save.disabled = Boolean(this.currentWord);
-    save.addEventListener("click", () => {
+    save.addEventListener("click", async () => {
       const app = this.plugin.createCore();
-      const saved = app.lookupWord(this.currentLookup?.word ?? "", { save: true }).savedWord;
+      const saved = (await app.lookupWord(this.currentLookup?.word ?? "", {
+        save: true,
+        source: this.currentLookup?.source as LookupSource
+      })).savedWord;
       app.close();
       if (saved) {
         this.currentWord = saved;
@@ -420,6 +447,21 @@ class WordLearningSettingTab extends PluginSettingTab {
           this.plugin.settings.defaultTags = value;
           await this.plugin.saveSettings();
         });
+      });
+
+    new Setting(containerEl)
+      .setName("Lookup source")
+      .setDesc("Choose local ECDICT, online Free Dictionary API, or both.")
+      .addDropdown((dropdown) => {
+        dropdown
+          .addOption("ecdict", "ECDICT local")
+          .addOption("free-dictionary", "Free Dictionary online")
+          .addOption("all", "All sources")
+          .setValue(this.plugin.settings.lookupSource)
+          .onChange(async (value) => {
+            this.plugin.settings.lookupSource = value as LookupSource;
+            await this.plugin.saveSettings();
+          });
       });
 
     new Setting(containerEl)

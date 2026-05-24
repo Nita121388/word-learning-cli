@@ -12,6 +12,8 @@ Desktop-only MVP plugin for the Word Learning project.
   - Refresh generated views
 - Settings for user database path, dictionary database path, default tags, auto-save lookup, and review limit.
 - ECDICT CSV import from the settings tab or command palette.
+- Online Free Dictionary lookup support.
+- Pronunciation playback when a lookup result includes an audio URL.
 
 ## Data
 
@@ -27,3 +29,10 @@ Import ECDICT:
 1. Open Word Learning settings.
 2. Set the ECDICT CSV path.
 3. Click `Import`.
+
+Online lookup:
+
+1. Open Word Learning settings.
+2. Set Lookup source to `Free Dictionary online` or `All sources`.
+3. Look up a word from the side panel or selected text.
+4. Click `Play` when an audio button is shown.

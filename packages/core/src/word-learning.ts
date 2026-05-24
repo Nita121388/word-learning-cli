@@ -4,6 +4,7 @@ import type { SqliteAdapter } from "./db/adapter.js";
 import { schemaSql } from "./db/schema.js";
 import { NodeSqliteAdapter } from "./db/node-sqlite.js";
 import { EcdictDictionary, type EcdictImportResult } from "./dictionary/ecdict.js";
+import { FreeDictionaryProvider } from "./dictionary/free-dictionary.js";
 import type {
   DictionaryEntry,
   DueWord,
@@ -21,6 +22,8 @@ import type {
 } from "./types.js";
 import { calculateSimpleSchedule } from "./review/simple-scheduler.js";
 import { createId, normalizeText, normalizeWord, nowIso, resolveVaultDbPath } from "./utils.js";
+
+export type LookupSource = "ecdict" | "free-dictionary" | "all";
 
 interface WordRow {
   id: string;
@@ -313,12 +316,35 @@ export class WordLearning {
     return result;
   }
 
-  lookupWord(word: string, options: { save?: boolean } = {}): LookupResult {
+  async lookupWord(word: string, options: { save?: boolean; source?: LookupSource } = {}): Promise<LookupResult> {
+    this.init();
+    const source = options.source ?? "ecdict";
+    const entries: DictionaryEntry[] = [];
+
+    if (source === "ecdict" || source === "all") {
+      const dictionary = new EcdictDictionary(this.dictionaryAdapter);
+      entries.push(...dictionary.lookup(word));
+    }
+
+    if (source === "free-dictionary" || source === "all") {
+      const provider = new FreeDictionaryProvider();
+      entries.push(...(await provider.lookup(word)));
+    }
+
+    const savedWord = options.save && entries[0] ? this.saveDictionaryEntry(entries[0]) : undefined;
+    const result: LookupResult = { word, entries, source };
+    if (savedWord) {
+      result.savedWord = savedWord;
+    }
+    return result;
+  }
+
+  lookupWordLocal(word: string, options: { save?: boolean } = {}): LookupResult {
     this.init();
     const dictionary = new EcdictDictionary(this.dictionaryAdapter);
     const entries = dictionary.lookup(word);
     const savedWord = options.save && entries[0] ? this.saveDictionaryEntry(entries[0]) : undefined;
-    const result: LookupResult = { word, entries };
+    const result: LookupResult = { word, entries, source: "ecdict" };
     if (savedWord) {
       result.savedWord = savedWord;
     }
@@ -662,11 +688,14 @@ export class WordLearning {
     if (entry.definition) input.meaningEn = entry.definition;
     if (entry.phonetic) input.phonetic = entry.phonetic;
     if (entry.pos) input.partOfSpeech = entry.pos;
+    if (entry.example) input.example = entry.example;
     const detail = this.addWord(input);
     this.recordFieldSource(detail.id, "meaning_zh", entry.provider, entry.translation, entry);
     this.recordFieldSource(detail.id, "meaning_en", entry.provider, entry.definition, entry);
     this.recordFieldSource(detail.id, "phonetic", entry.provider, entry.phonetic, entry);
     this.recordFieldSource(detail.id, "part_of_speech", entry.provider, entry.pos, entry);
+    this.recordFieldSource(detail.id, "example", entry.provider, entry.example, entry);
+    this.recordFieldSource(detail.id, "audio_url", entry.provider, entry.audioUrl, entry);
     return detail;
   }
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { Command } from "commander";
-import { WordLearning, fail, ok, type MorphemeInput, type Rating, type SentenceInput, type WordInput, type WordStatus } from "@word-learning/core";
+import { WordLearning, fail, ok, type LookupSource, type MorphemeInput, type Rating, type SentenceInput, type WordInput, type WordStatus } from "@word-learning/core";
 
 interface GlobalOptions {
   vault?: string;
@@ -129,11 +129,12 @@ program
   .argument("<word>")
   .description("look up a word in configured dictionary sources")
   .option("--save", "save the first dictionary result into the learning database")
-  .action((word: string, commandOptions: { save?: boolean }) => {
+  .option("--source <source>", "ecdict | free-dictionary | all", "ecdict")
+  .action(async (word: string, commandOptions: { save?: boolean; source: LookupSource }) => {
     const options = program.opts<GlobalOptions>();
     try {
       const app = createApp(options);
-      const result = app.lookupWord(word, { save: commandOptions.save === true });
+      const result = await app.lookupWord(word, { save: commandOptions.save === true, source: commandOptions.source });
       app.close();
       printResult(result, options.json);
     } catch (error) {

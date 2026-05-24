@@ -101,6 +101,8 @@ export interface DictionaryEntry {
   pos: string | null;
   tags: string[];
   exchange: string | null;
+  example: string | null;
+  audioUrl: string | null;
   provider: string;
   source: string | null;
 }
@@ -108,6 +110,7 @@ export interface DictionaryEntry {
 export interface LookupResult {
   word: string;
   entries: DictionaryEntry[];
+  source: string;
   savedWord?: WordDetail;
 }
 

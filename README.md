@@ -41,7 +41,15 @@ Look up a word and save the first dictionary result into the learning database:
 wordcli --vault ~/Documents/MyVault --json lookup precise --save
 ```
 
+Use the online Free Dictionary API:
+
+```bash
+wordcli --vault ~/Documents/MyVault --json lookup hello --source free-dictionary
+wordcli --vault ~/Documents/MyVault --json lookup hello --source all --save
+```
+
 Saved dictionary fields are recorded in `word_sources` so generated or imported content can be traced back to a provider.
+Online entries can include an `audioUrl` for pronunciation playback.
 
 ## Obsidian Plugin
 
@@ -53,3 +61,4 @@ The plugin zip is written to `dist/obsidian-plugin/word-learning.zip`.
 
 The MVP plugin is desktop-only and provides a side panel for lookup, save-to-library, due review, and generated view refresh.
 It also supports importing an ECDICT CSV from the plugin settings tab.
+The side panel can play pronunciation audio when the selected provider returns an audio URL.

@@ -72,7 +72,7 @@ describe("WordLearning", () => {
     });
 
     const imported = await app.importEcdict(csv);
-    const lookup = app.lookupWord("precise", { save: true });
+    const lookup = await app.lookupWord("precise", { save: true });
 
     expect(imported.imported).toBe(1);
     expect(lookup.entries[0]?.translation).toBe("精确的");

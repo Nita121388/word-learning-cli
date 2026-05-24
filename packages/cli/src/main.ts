@@ -1,15 +1,21 @@
 #!/usr/bin/env node
 import { Command } from "commander";
-import { WordLearning, fail, ok, type LookupSource, type MorphemeInput, type Rating, type SentenceInput, type WordInput, type WordStatus } from "@word-learning/core";
+import { WordLearning, fail, ok, type LookupSource, type MorphemeInput, type Rating, type SentenceInput, type WordInput, type WordLearningOptions, type WordStatus } from "@word-learning/core";
 
 interface GlobalOptions {
   vault?: string;
   db?: string;
+  reviewAlgorithm?: string;
   json?: boolean;
 }
 
 function createApp(options: GlobalOptions): WordLearning {
-  return new WordLearning(withDefined({ vaultPath: options.vault, dbPath: options.db }));
+  const appOptions: WordLearningOptions = {};
+  const reviewAlgorithm = parseReviewAlgorithm(options.reviewAlgorithm);
+  if (options.vault !== undefined) appOptions.vaultPath = options.vault;
+  if (options.db !== undefined) appOptions.dbPath = options.db;
+  if (reviewAlgorithm !== undefined) appOptions.reviewAlgorithm = reviewAlgorithm;
+  return new WordLearning(appOptions);
 }
 
 function withDefined<T extends Record<string, unknown>>(value: T): Partial<T> {
@@ -50,14 +56,21 @@ function parseStatus(value: string): WordStatus {
   throw new Error(`invalid status: ${value}`);
 }
 
+function parseReviewAlgorithm(value: string | undefined): string | undefined {
+  if (value === undefined) return undefined;
+  if (value === "simple_v1" || value === "fsrs_v1") return value;
+  throw new Error(`invalid review algorithm: ${value}`);
+}
+
 const program = new Command();
 
 program
   .name("wordcli")
   .description("Local-first vocabulary learning CLI for AI agents and Obsidian")
-  .version("0.1.0")
+  .version("0.1.3")
   .option("--vault <path>", "Obsidian vault path")
   .option("--db <path>", "SQLite database path")
+  .option("--review-algorithm <algorithm>", "simple_v1 | fsrs_v1")
   .option("--json", "print machine-readable JSON");
 
 program

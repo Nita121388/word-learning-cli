@@ -1,6 +1,6 @@
 {
   "name": "word-learning-cli-workspace",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "private": true,
   "type": "module",
   "packageManager": "pnpm@10.32.1",
@@ -10,7 +10,7 @@
     "test": "pnpm -r test",
     "lint": "pnpm -r lint",
     "format": "prettier --write .",
-    "pack:cli": "mkdir -p dist/cli && cd packages/cli && pnpm pack --pack-destination ../../dist/cli",
+    "pack:cli": "pnpm --filter @word-learning/cli build && mkdir -p dist/cli && cd packages/cli && pnpm pack --pack-destination ../../dist/cli",
     "pack:plugin": "pnpm --filter @word-learning/obsidian-plugin build && node scripts/package-obsidian-plugin.mjs",
     "release:dry": "changeset version --snapshot dry-run"
   },

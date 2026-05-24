@@ -1,8 +1,9 @@
-export { WordLearning, type LookupSource } from "./word-learning.js";
+export { WordLearning, type LookupSource, type WordLearningOptions } from "./word-learning.js";
 export { FreeDictionaryProvider } from "./dictionary/free-dictionary.js";
 export { isNodeSqliteAvailable } from "./db/node-sqlite.js";
 export { SchedulerRegistry, type NextSchedule, type ReviewScheduler } from "./review/scheduler.js";
 export { SimpleScheduler } from "./review/simple-scheduler.js";
+export { FsrsScheduler } from "./review/fsrs-scheduler.js";
 export type {
   ApiResponse,
   DictionaryEntry,

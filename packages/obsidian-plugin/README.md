@@ -10,7 +10,7 @@ Desktop-only MVP plugin for the Word Learning project.
   - Add selected word
   - Open today review
   - Refresh generated views
-- Settings for user database path, dictionary database path, default tags, auto-save lookup, and review limit.
+- Settings for user database path, dictionary database path, default tags, auto-save lookup, review algorithm, and review limit.
 - ECDICT CSV import from the settings tab or command palette.
 - Online Free Dictionary lookup support.
 - Pronunciation playback when a lookup result includes an audio URL.
@@ -36,6 +36,12 @@ Online lookup:
 2. Set Lookup source to `Free Dictionary online` or `All sources`.
 3. Look up a word from the side panel or selected text.
 4. Click `Play` when an audio button is shown.
+
+Review scheduling:
+
+1. Open Word Learning settings.
+2. Keep `Simple review curve` for the built-in fixed schedule, or choose `FSRS` for the optional FSRS scheduler.
+3. Newly added words use the selected algorithm. Existing words keep their stored schedule algorithm.
 
 ## Runtime Notes
 

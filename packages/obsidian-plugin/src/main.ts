@@ -3,11 +3,14 @@ import { FreeDictionaryProvider, WordLearning, isNodeSqliteAvailable, resolveVau
 
 const VIEW_TYPE = "word-learning-view";
 
+type ReviewAlgorithm = "simple_v1" | "fsrs_v1";
+
 interface WordLearningSettings {
   databasePath: string;
   dictionaryDatabasePath: string;
   ecdictCsvPath: string;
   lookupSource: LookupSource;
+  reviewAlgorithm: ReviewAlgorithm;
   defaultTags: string;
   autoSaveLookup: boolean;
   reviewLimit: number;
@@ -18,6 +21,7 @@ const defaultSettings: WordLearningSettings = {
   dictionaryDatabasePath: ".word-learning/dictionaries/ecdict.sqlite",
   ecdictCsvPath: "",
   lookupSource: "ecdict",
+  reviewAlgorithm: "simple_v1",
   defaultTags: "",
   autoSaveLookup: false,
   reviewLimit: 10
@@ -123,12 +127,14 @@ export default class WordLearningPlugin extends Plugin {
     if (vaultPath) {
       return new WordLearning({
         dbPath: resolvePath(vaultPath, this.settings.databasePath, resolveVaultDbPath(vaultPath)),
-        dictionaryDbPath: resolvePath(vaultPath, this.settings.dictionaryDatabasePath)
+        dictionaryDbPath: resolvePath(vaultPath, this.settings.dictionaryDatabasePath),
+        reviewAlgorithm: this.settings.reviewAlgorithm
       });
     }
     return new WordLearning({
       dbPath: this.settings.databasePath,
-      dictionaryDbPath: this.settings.dictionaryDatabasePath
+      dictionaryDbPath: this.settings.dictionaryDatabasePath,
+      reviewAlgorithm: this.settings.reviewAlgorithm
     });
   }
 
@@ -541,6 +547,20 @@ class WordLearningSettingTab extends PluginSettingTab {
       });
 
     new Setting(containerEl)
+      .setName("Review algorithm")
+      .setDesc("Choose the scheduling algorithm used when new words are added.")
+      .addDropdown((dropdown) => {
+        dropdown
+          .addOption("simple_v1", "Simple review curve")
+          .addOption("fsrs_v1", "FSRS")
+          .setValue(this.plugin.settings.reviewAlgorithm)
+          .onChange(async (value) => {
+            this.plugin.settings.reviewAlgorithm = parseReviewAlgorithm(value);
+            await this.plugin.saveSettings();
+          });
+      });
+
+    new Setting(containerEl)
       .setName("Review limit")
       .setDesc("Maximum due words shown in the side panel.")
       .addText((text) => {
@@ -556,6 +576,10 @@ class WordLearningSettingTab extends PluginSettingTab {
 
 function normalizeInput(value: string): string {
   return value.trim().replace(/^\W+|\W+$/g, "");
+}
+
+function parseReviewAlgorithm(value: string): ReviewAlgorithm {
+  return value === "fsrs_v1" ? "fsrs_v1" : "simple_v1";
 }
 
 function resolvePath(vaultPath: string, configuredPath: string, fallback?: string): string {

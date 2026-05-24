@@ -21,6 +21,7 @@ import type {
   WordStatus
 } from "./types.js";
 import { SimpleScheduler } from "./review/simple-scheduler.js";
+import { FsrsScheduler } from "./review/fsrs-scheduler.js";
 import { SchedulerRegistry, type ReviewScheduler } from "./review/scheduler.js";
 import { createId, normalizeText, normalizeWord, nowIso, resolveVaultDbPath } from "./utils.js";
 
@@ -76,6 +77,7 @@ export class WordLearning {
 
   constructor(options: WordLearningOptions) {
     this.schedulers.register(new SimpleScheduler());
+    this.schedulers.register(new FsrsScheduler());
     if (options.scheduler) {
       this.schedulers.register(options.scheduler);
     }

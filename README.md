@@ -10,7 +10,7 @@ Local-first English vocabulary learning system for CLI, AI agents, and Obsidian.
 
 The current storage strategy is SQLite as the structured source of truth, with JSONL operation logs and limited generated Markdown views for Obsidian.
 
-Review scheduling is adapter-based. `simple_v1` is the default scheduler, and new schedulers can be registered through the core `ReviewScheduler` interface.
+Review scheduling is adapter-based. `simple_v1` is the default scheduler, `fsrs_v1` is available as an optional FSRS scheduler, and custom schedulers can be registered through the core `ReviewScheduler` interface.
 
 ## Development
 
@@ -27,6 +27,13 @@ pnpm --filter @word-learning/cli dev -- --help
 wordcli init --vault ~/Documents/MyVault
 wordcli add precise --meaning-zh "精确的" --tag writing --vault ~/Documents/MyVault
 wordcli review due --vault ~/Documents/MyVault --json
+```
+
+Use FSRS for newly added words:
+
+```bash
+wordcli --vault ~/Documents/MyVault --review-algorithm fsrs_v1 add retain
+wordcli --vault ~/Documents/MyVault review answer retain --rating good
 ```
 
 ## Dictionary Lookup
@@ -64,5 +71,6 @@ The plugin zip is written to `dist/obsidian-plugin/word-learning.zip`.
 The MVP plugin is desktop-only and provides a side panel for lookup, save-to-library, due review, and generated view refresh.
 It also supports importing an ECDICT CSV from the plugin settings tab.
 The side panel can play pronunciation audio when the selected provider returns an audio URL.
+The settings tab can choose the review algorithm for newly added words: `simple_v1` or `fsrs_v1`.
 
 If Obsidian's runtime cannot load Node's SQLite module, the plugin falls back to online lookup and pronunciation playback. Saving words, local ECDICT lookup, review scheduling, and generated views require SQLite support.

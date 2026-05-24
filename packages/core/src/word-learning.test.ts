@@ -117,4 +117,30 @@ describe("WordLearning", () => {
     expect(appWithScheduler.getWord("custom")?.schedule?.algorithm).toBe("custom_v1");
     appWithScheduler.close();
   });
+
+  it("stores and restores FSRS review state", () => {
+    const dir = mkdtempSync(join(tmpdir(), "word-learning-"));
+    dirs.push(dir);
+    const app = new WordLearning({
+      dbPath: join(dir, "user.sqlite"),
+      reviewAlgorithm: "fsrs_v1"
+    });
+    app.addWord({ word: "retain" });
+
+    const first = app.submitReview("retain", "good", new Date("2026-05-24T00:00:00.000Z"));
+    const firstSchedule = app.getWord("retain")?.schedule;
+
+    expect(first.intervalMinutes).toBeGreaterThan(0);
+    expect(firstSchedule?.algorithm).toBe("fsrs_v1");
+    expect(firstSchedule?.reviewCount).toBe(1);
+    expect(firstSchedule?.stateJson).toContain("\"card\"");
+
+    app.submitReview("retain", "hard", new Date(first.nextDueAt));
+    const secondSchedule = app.getWord("retain")?.schedule;
+
+    expect(secondSchedule?.algorithm).toBe("fsrs_v1");
+    expect(secondSchedule?.reviewCount).toBe(2);
+    expect(secondSchedule?.stateJson).toContain("\"last_review\"");
+    app.close();
+  });
 });

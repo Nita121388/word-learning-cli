@@ -52,3 +52,4 @@ pnpm pack:plugin
 The plugin zip is written to `dist/obsidian-plugin/word-learning.zip`.
 
 The MVP plugin is desktop-only and provides a side panel for lookup, save-to-library, due review, and generated view refresh.
+It also supports importing an ECDICT CSV from the plugin settings tab.

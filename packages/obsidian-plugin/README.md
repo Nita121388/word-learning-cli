@@ -11,6 +11,7 @@ Desktop-only MVP plugin for the Word Learning project.
   - Open today review
   - Refresh generated views
 - Settings for user database path, dictionary database path, default tags, auto-save lookup, and review limit.
+- ECDICT CSV import from the settings tab or command palette.
 
 ## Data
 
@@ -21,3 +22,8 @@ The plugin uses the shared `@word-learning/core` package and stores structured d
 
 Generated Obsidian views are written under `单词学习/`.
 
+Import ECDICT:
+
+1. Open Word Learning settings.
+2. Set the ECDICT CSV path.
+3. Click `Import`.

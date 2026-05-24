@@ -6,6 +6,7 @@ const VIEW_TYPE = "word-learning-view";
 interface WordLearningSettings {
   databasePath: string;
   dictionaryDatabasePath: string;
+  ecdictCsvPath: string;
   defaultTags: string;
   autoSaveLookup: boolean;
   reviewLimit: number;
@@ -14,6 +15,7 @@ interface WordLearningSettings {
 const defaultSettings: WordLearningSettings = {
   databasePath: ".word-learning/user.sqlite",
   dictionaryDatabasePath: ".word-learning/dictionaries/ecdict.sqlite",
+  ecdictCsvPath: "",
   defaultTags: "",
   autoSaveLookup: false,
   reviewLimit: 10
@@ -87,6 +89,14 @@ export default class WordLearningPlugin extends Plugin {
         new Notice("Word Learning views refreshed");
       }
     });
+
+    this.addCommand({
+      id: "import-ecdict",
+      name: "Import ECDICT CSV",
+      callback: () => {
+        void this.importEcdictFromSettings();
+      }
+    });
   }
 
   async loadSettings(): Promise<void> {
@@ -118,6 +128,23 @@ export default class WordLearningPlugin extends Plugin {
       .filter(Boolean);
   }
 
+  async importEcdictFromSettings(): Promise<void> {
+    const csvPath = this.resolveConfiguredPath(this.settings.ecdictCsvPath);
+    if (!csvPath) {
+      new Notice("Set ECDICT CSV path first");
+      return;
+    }
+    const app = this.createCore();
+    try {
+      const result = await app.importEcdict(csvPath);
+      new Notice(`Imported ${result.imported} ECDICT entries`);
+    } catch (error) {
+      new Notice(error instanceof Error ? error.message : String(error));
+    } finally {
+      app.close();
+    }
+  }
+
   async activateView(word?: string): Promise<void> {
     const leaf = this.app.workspace.getRightLeaf(false);
     if (!leaf) {
@@ -134,6 +161,16 @@ export default class WordLearningPlugin extends Plugin {
   getVaultBasePath(): string | null {
     const adapter = this.app.vault.adapter as { getBasePath?: () => string };
     return adapter.getBasePath?.() ?? null;
+  }
+
+  resolveConfiguredPath(configuredPath: string): string | null {
+    const trimmed = configuredPath.trim();
+    if (!trimmed) return null;
+    const vaultPath = this.getVaultBasePath();
+    if (!vaultPath || trimmed.startsWith("/")) {
+      return trimmed;
+    }
+    return `${vaultPath}/${trimmed}`;
   }
 
   private getSelectedText(): string {
@@ -353,6 +390,24 @@ class WordLearningSettingTab extends PluginSettingTab {
         text.onChange(async (value) => {
           this.plugin.settings.dictionaryDatabasePath = value.trim() || defaultSettings.dictionaryDatabasePath;
           await this.plugin.saveSettings();
+        });
+      });
+
+    new Setting(containerEl)
+      .setName("ECDICT CSV path")
+      .setDesc("Path to the ECDICT CSV file. Absolute paths are supported; relative paths are resolved from the vault.")
+      .addText((text) => {
+        text.setPlaceholder("/path/to/ecdict.csv");
+        text.setValue(this.plugin.settings.ecdictCsvPath);
+        text.onChange(async (value) => {
+          this.plugin.settings.ecdictCsvPath = value.trim();
+          await this.plugin.saveSettings();
+        });
+      })
+      .addButton((button) => {
+        button.setButtonText("Import");
+        button.onClick(() => {
+          void this.plugin.importEcdictFromSettings();
         });
       });
 

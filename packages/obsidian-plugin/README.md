@@ -36,3 +36,11 @@ Online lookup:
 2. Set Lookup source to `Free Dictionary online` or `All sources`.
 3. Look up a word from the side panel or selected text.
 4. Click `Play` when an audio button is shown.
+
+## Runtime Notes
+
+The plugin avoids crashing when Node SQLite is unavailable. In that case:
+
+- Online Free Dictionary lookup still works.
+- Pronunciation playback still works when an audio URL exists.
+- Saving words, local ECDICT lookup, review scheduling, and generated views are disabled until SQLite is available.

@@ -1,4 +1,6 @@
 export { WordLearning, type LookupSource } from "./word-learning.js";
+export { FreeDictionaryProvider } from "./dictionary/free-dictionary.js";
+export { isNodeSqliteAvailable } from "./db/node-sqlite.js";
 export type {
   ApiResponse,
   DictionaryEntry,

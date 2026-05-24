@@ -62,3 +62,5 @@ The plugin zip is written to `dist/obsidian-plugin/word-learning.zip`.
 The MVP plugin is desktop-only and provides a side panel for lookup, save-to-library, due review, and generated view refresh.
 It also supports importing an ECDICT CSV from the plugin settings tab.
 The side panel can play pronunciation audio when the selected provider returns an audio URL.
+
+If Obsidian's runtime cannot load Node's SQLite module, the plugin falls back to online lookup and pronunciation playback. Saving words, local ECDICT lookup, review scheduling, and generated views require SQLite support.

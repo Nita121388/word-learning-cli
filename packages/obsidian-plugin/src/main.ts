@@ -1,5 +1,5 @@
 import { ItemView, Notice, Plugin, PluginSettingTab, Setting, WorkspaceLeaf } from "obsidian";
-import { WordLearning, resolveVaultDbPath, type DueWord, type LookupResult, type LookupSource, type Rating, type WordDetail, type WordSource } from "@word-learning/core";
+import { FreeDictionaryProvider, WordLearning, isNodeSqliteAvailable, resolveVaultDbPath, type DueWord, type LookupResult, type LookupSource, type Rating, type WordDetail, type WordSource } from "@word-learning/core";
 
 const VIEW_TYPE = "word-learning-view";
 
@@ -52,6 +52,10 @@ export default class WordLearningPlugin extends Plugin {
       id: "add-selected-word",
       name: "Add selected word",
       callback: () => {
+        if (!this.sqliteAvailable()) {
+          new Notice("SQLite is unavailable. Cannot save in this runtime.");
+          return;
+        }
         const selected = this.getSelectedText();
         if (!selected) {
           new Notice("No selected word");
@@ -85,6 +89,10 @@ export default class WordLearningPlugin extends Plugin {
           new Notice("Vault base path is unavailable");
           return;
         }
+        if (!this.sqliteAvailable()) {
+          new Notice("SQLite is unavailable. Cannot refresh generated views.");
+          return;
+        }
         const app = this.createCore();
         app.refreshViews(vaultPath);
         app.close();
@@ -110,6 +118,7 @@ export default class WordLearningPlugin extends Plugin {
   }
 
   createCore(): WordLearning {
+    this.assertSqliteAvailable();
     const vaultPath = this.getVaultBasePath();
     if (vaultPath) {
       return new WordLearning({
@@ -131,6 +140,10 @@ export default class WordLearningPlugin extends Plugin {
   }
 
   async importEcdictFromSettings(): Promise<void> {
+    if (!this.sqliteAvailable()) {
+      new Notice("SQLite is unavailable. Cannot import ECDICT in this runtime.");
+      return;
+    }
     const csvPath = this.resolveConfiguredPath(this.settings.ecdictCsvPath);
     if (!csvPath) {
       new Notice("Set ECDICT CSV path first");
@@ -175,6 +188,16 @@ export default class WordLearningPlugin extends Plugin {
     return `${vaultPath}/${trimmed}`;
   }
 
+  sqliteAvailable(): boolean {
+    return isNodeSqliteAvailable();
+  }
+
+  assertSqliteAvailable(): void {
+    if (!this.sqliteAvailable()) {
+      throw new Error("SQLite is unavailable in this Obsidian runtime. Online lookup can still work, but saving and review require desktop Node SQLite support.");
+    }
+  }
+
   private getSelectedText(): string {
     const selection = this.app.workspace.activeEditor?.editor?.getSelection() ?? "";
     return normalizeInput(selection);
@@ -210,31 +233,38 @@ class WordLearningView extends ItemView {
   async lookup(rawWord: string): Promise<void> {
     const word = normalizeInput(rawWord);
     if (!word) return;
-    const app = this.plugin.createCore();
     try {
-      this.currentLookup = await app.lookupWord(word, {
-        save: this.plugin.settings.autoSaveLookup,
-        source: this.plugin.settings.lookupSource
-      });
+      this.currentLookup = await this.lookupWithConfiguredSource(word);
     } catch (error) {
       new Notice(error instanceof Error ? error.message : String(error));
       this.currentLookup = { word, entries: [], source: this.plugin.settings.lookupSource };
     }
-    this.currentWord = app.getWord(word);
-    this.currentSources = this.currentWord ? app.getWordSources(word) : [];
-    this.due = app.getDueWords({ limit: this.plugin.settings.reviewLimit });
-    app.close();
+    this.refreshData();
     this.render();
   }
 
   private refreshData(): void {
-    const app = this.plugin.createCore();
-    this.due = app.getDueWords({ limit: this.plugin.settings.reviewLimit });
-    if (this.currentWord) {
-      this.currentWord = app.getWord(this.currentWord.word);
-      this.currentSources = this.currentWord ? app.getWordSources(this.currentWord.word) : [];
+    if (!this.plugin.sqliteAvailable()) {
+      this.due = [];
+      this.currentWord = null;
+      this.currentSources = [];
+      return;
     }
-    app.close();
+    try {
+      const app = this.plugin.createCore();
+      this.due = app.getDueWords({ limit: this.plugin.settings.reviewLimit });
+      const current = this.currentLookup?.word ?? this.currentWord?.word;
+      if (current) {
+        this.currentWord = app.getWord(current);
+        this.currentSources = this.currentWord ? app.getWordSources(current) : [];
+      }
+      app.close();
+    } catch (error) {
+      this.due = [];
+      this.currentWord = null;
+      this.currentSources = [];
+      new Notice(error instanceof Error ? error.message : String(error));
+    }
   }
 
   private render(): void {
@@ -310,6 +340,10 @@ class WordLearningView extends ItemView {
     const save = controls.createEl("button", { text: this.currentWord ? "Saved" : "Save" });
     save.disabled = Boolean(this.currentWord);
     save.addEventListener("click", async () => {
+      if (!this.plugin.sqliteAvailable()) {
+        new Notice("SQLite is unavailable. Cannot save in this runtime.");
+        return;
+      }
       const app = this.plugin.createCore();
       const saved = (await app.lookupWord(this.currentLookup?.word ?? "", {
         save: true,
@@ -335,6 +369,10 @@ class WordLearningView extends ItemView {
   private renderReview(container: Element): void {
     const section = container.createDiv({ cls: "word-learning-section" });
     section.createEl("h3", { text: `今日复习 (${this.due.length})` });
+    if (!this.plugin.sqliteAvailable()) {
+      section.createEl("p", { text: "SQLite is unavailable. Review is disabled in this runtime." });
+      return;
+    }
     if (this.due.length === 0) {
       section.createEl("p", { text: "No due words." });
       return;
@@ -353,6 +391,10 @@ class WordLearningView extends ItemView {
   private addReviewButton(container: Element, word: string, label: string, rating: Rating): void {
     const button = container.createEl("button", { text: label });
     button.addEventListener("click", () => {
+      if (!this.plugin.sqliteAvailable()) {
+        new Notice("SQLite is unavailable. Review is disabled in this runtime.");
+        return;
+      }
       const app = this.plugin.createCore();
       app.submitReview(word, rating);
       this.due = app.getDueWords({ limit: this.plugin.settings.reviewLimit });
@@ -360,6 +402,25 @@ class WordLearningView extends ItemView {
       new Notice(`Reviewed ${word}: ${label}`);
       this.render();
     });
+  }
+
+  private async lookupWithConfiguredSource(word: string): Promise<LookupResult> {
+    const source = this.plugin.settings.lookupSource;
+    if (!this.plugin.sqliteAvailable()) {
+      const provider = new FreeDictionaryProvider();
+      return {
+        word,
+        entries: await provider.lookup(word),
+        source: "free-dictionary"
+      };
+    }
+    const app = this.plugin.createCore();
+    const result = await app.lookupWord(word, {
+      save: this.plugin.settings.autoSaveLookup,
+      source
+    });
+    app.close();
+    return result;
   }
 
   private renderActions(container: Element): void {
@@ -375,6 +436,10 @@ class WordLearningView extends ItemView {
       const vaultPath = this.plugin.getVaultBasePath();
       if (!vaultPath) {
         new Notice("Vault base path is unavailable");
+        return;
+      }
+      if (!this.plugin.sqliteAvailable()) {
+        new Notice("SQLite is unavailable. Cannot generate views.");
         return;
       }
       const app = this.plugin.createCore();

@@ -20,7 +20,8 @@ import type {
   WordSource,
   WordStatus
 } from "./types.js";
-import { calculateSimpleSchedule } from "./review/simple-scheduler.js";
+import { SimpleScheduler } from "./review/simple-scheduler.js";
+import { SchedulerRegistry, type ReviewScheduler } from "./review/scheduler.js";
 import { createId, normalizeText, normalizeWord, nowIso, resolveVaultDbPath } from "./utils.js";
 
 export type LookupSource = "ecdict" | "free-dictionary" | "all";
@@ -62,14 +63,23 @@ export interface WordLearningOptions {
   dictionaryDbPath?: string;
   adapter?: SqliteAdapter;
   dictionaryAdapter?: SqliteAdapter;
+  scheduler?: ReviewScheduler;
+  reviewAlgorithm?: string;
 }
 
 export class WordLearning {
   private readonly adapter: SqliteAdapter;
   private readonly dictionaryAdapter: SqliteAdapter;
+  private readonly schedulers = new SchedulerRegistry();
+  private readonly reviewAlgorithm: string;
   private readonly baseDir: string;
 
   constructor(options: WordLearningOptions) {
+    this.schedulers.register(new SimpleScheduler());
+    if (options.scheduler) {
+      this.schedulers.register(options.scheduler);
+    }
+    this.reviewAlgorithm = options.reviewAlgorithm ?? options.scheduler?.algorithm ?? "simple_v1";
     if (options.adapter) {
       this.adapter = options.adapter;
       this.dictionaryAdapter = options.dictionaryAdapter ?? options.adapter;
@@ -139,8 +149,8 @@ export class WordLearning {
       at
     );
     this.adapter.prepare(
-      `INSERT INTO schedules (word_id, algorithm, due_at, updated_at) VALUES (?, 'simple_v1', ?, ?)`
-    ).run(id, at, at);
+      `INSERT INTO schedules (word_id, algorithm, due_at, updated_at) VALUES (?, ?, ?, ?)`
+    ).run(id, this.reviewAlgorithm, at, at);
     this.addTags(id, input.tags ?? []);
     this.writeOp("word.add", "word", id, input);
     return this.requireWord(input.word);
@@ -382,7 +392,8 @@ export class WordLearning {
     this.init();
     const detail = this.requireWord(word);
     const current = this.getSchedule(detail.id);
-    const next = calculateSimpleSchedule(current, rating, reviewedAt);
+    const scheduler = this.schedulers.get(current?.algorithm ?? "simple_v1");
+    const next = scheduler.schedule(current, rating, reviewedAt);
     const previousDueAt = current?.dueAt ?? null;
     const reviewedAtIso = reviewedAt.toISOString();
     const reviewId = createId("review");
@@ -390,14 +401,14 @@ export class WordLearning {
     this.adapter.prepare(
       `INSERT INTO reviews (
         id, word_id, rating, reviewed_at, previous_due_at, next_due_at, interval_minutes, algorithm, state_json
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, 'simple_v1', ?)`
-    ).run(reviewId, detail.id, rating, reviewedAtIso, previousDueAt, next.dueAt, next.intervalMinutes, null);
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).run(reviewId, detail.id, rating, reviewedAtIso, previousDueAt, next.dueAt, next.intervalMinutes, next.algorithm, next.stateJson);
     this.adapter.prepare(
       `UPDATE schedules
        SET due_at = ?, last_reviewed_at = ?, review_count = ?, lapse_count = ?,
-           interval_minutes = ?, algorithm = 'simple_v1', updated_at = ?
+           interval_minutes = ?, algorithm = ?, state_json = ?, updated_at = ?
        WHERE word_id = ?`
-    ).run(next.dueAt, reviewedAtIso, next.reviewCount, next.lapseCount, next.intervalMinutes, reviewedAtIso, detail.id);
+    ).run(next.dueAt, reviewedAtIso, next.reviewCount, next.lapseCount, next.intervalMinutes, next.algorithm, next.stateJson, reviewedAtIso, detail.id);
     if (detail.status === "new") {
       this.adapter.prepare(`UPDATE words SET status = 'learning', updated_at = ? WHERE id = ?`).run(reviewedAtIso, detail.id);
     }
@@ -539,8 +550,8 @@ export class WordLearning {
     const at = nowIso();
     for (const row of missingSchedules) {
       this.adapter.prepare(
-        `INSERT INTO schedules (word_id, algorithm, due_at, updated_at) VALUES (?, 'simple_v1', ?, ?)`
-      ).run(row.id, at, at);
+      `INSERT INTO schedules (word_id, algorithm, due_at, updated_at) VALUES (?, ?, ?, ?)`
+      ).run(row.id, this.reviewAlgorithm, at, at);
     }
     this.writeOp("repair", "system", createId("repair"), { missingSchedules: missingSchedules.length });
     return { repairedMissingSchedules: missingSchedules.length };

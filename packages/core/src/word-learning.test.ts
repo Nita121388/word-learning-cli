@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { WordLearning } from "./word-learning.js";
+import type { ReviewScheduler } from "./review/scheduler.js";
 
 const dirs: string[] = [];
 
@@ -79,5 +80,41 @@ describe("WordLearning", () => {
     expect(lookup.savedWord?.meaningZh).toBe("精确的");
     expect(lookup.savedWord?.tags).toContain("ielts");
     app.close();
+  });
+
+  it("accepts a custom review scheduler", () => {
+    const scheduler: ReviewScheduler = {
+      algorithm: "custom_v1",
+      schedule(current, _rating, reviewedAt) {
+        return {
+          algorithm: "custom_v1",
+          dueAt: new Date(reviewedAt.getTime() + 60_000).toISOString(),
+          intervalMinutes: 1,
+          lapseCount: current?.lapseCount ?? 0,
+          reviewCount: (current?.reviewCount ?? 0) + 1,
+          stateJson: JSON.stringify({ custom: true })
+        };
+      }
+    };
+    const app = createApp();
+    app.addWord({ word: "adapter" });
+    app.updateWord("adapter", { status: "learning" });
+    const result = app.submitReview("adapter", "good", new Date("2026-05-24T00:00:00.000Z"));
+
+    expect(result.nextDueAt).toBe("2026-05-27T00:00:00.000Z");
+    app.close();
+
+    const customDir = mkdtempSync(join(tmpdir(), "word-learning-"));
+    dirs.push(customDir);
+    const appWithScheduler = new WordLearning({
+      dbPath: join(customDir, "user.sqlite"),
+      scheduler,
+      reviewAlgorithm: "custom_v1"
+    });
+    appWithScheduler.addWord({ word: "custom" });
+    const customResult = appWithScheduler.submitReview("custom", "good", new Date("2026-05-24T00:00:00.000Z"));
+    expect(customResult.intervalMinutes).toBe(1);
+    expect(appWithScheduler.getWord("custom")?.schedule?.algorithm).toBe("custom_v1");
+    appWithScheduler.close();
   });
 });

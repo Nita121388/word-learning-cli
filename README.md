@@ -10,6 +10,8 @@ Local-first English vocabulary learning system for CLI, AI agents, and Obsidian.
 
 The current storage strategy is SQLite as the structured source of truth, with JSONL operation logs and limited generated Markdown views for Obsidian.
 
+Review scheduling is adapter-based. `simple_v1` is the default scheduler, and new schedulers can be registered through the core `ReviewScheduler` interface.
+
 ## Development
 
 ```bash

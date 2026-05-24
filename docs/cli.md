@@ -30,6 +30,8 @@ wordcli review answer WORD --rating hard
 wordcli review answer WORD --rating good
 ```
 
+The current default scheduler is `simple_v1`. The core package exposes a `ReviewScheduler` interface so future FSRS or custom schedulers can be plugged in without changing CLI commands.
+
 Relations:
 
 ```bash

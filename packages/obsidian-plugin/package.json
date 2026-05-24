@@ -1,0 +1,19 @@
+{
+  "name": "@word-learning/obsidian-plugin",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.json && node esbuild.config.mjs",
+    "check": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run --passWithNoTests",
+    "lint": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@word-learning/core": "workspace:*"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.0",
+    "obsidian": "^1.10.3"
+  }
+}

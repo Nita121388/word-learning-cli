@@ -1,0 +1,11 @@
+{
+  "id": "word-learning",
+  "name": "Word Learning",
+  "version": "0.1.0",
+  "minAppVersion": "1.5.0",
+  "description": "Local-first vocabulary learning with SQLite, review scheduling, and controlled Obsidian views.",
+  "author": "Nita121388",
+  "authorUrl": "https://github.com/Nita121388",
+  "isDesktopOnly": true
+}
+

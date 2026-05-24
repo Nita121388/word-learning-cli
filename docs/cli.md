@@ -47,3 +47,10 @@ wordcli lookup precise
 wordcli lookup precise --save
 ```
 
+Obsidian plugin package:
+
+```bash
+pnpm pack:plugin
+```
+
+The generated zip is written to `dist/obsidian-plugin/word-learning.zip`.

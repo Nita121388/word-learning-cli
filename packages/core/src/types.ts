@@ -111,6 +111,15 @@ export interface LookupResult {
   savedWord?: WordDetail;
 }
 
+export interface WordSource {
+  id: string;
+  provider: string;
+  fieldName: string;
+  license: string | null;
+  url: string | null;
+  fetchedAt: string;
+}
+
 export type ApiResponse<T> =
   | { ok: true; data: T; meta?: Record<string, unknown> }
   | { ok: false; error: { code: string; message: string; details?: unknown } };

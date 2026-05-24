@@ -2,10 +2,26 @@
   padding: 12px;
 }
 
+.word-learning-lookup {
+  display: flex;
+  gap: 8px;
+  margin: 12px 0;
+}
+
+.word-learning-lookup input {
+  flex: 1;
+  min-width: 0;
+}
+
+.word-learning-section {
+  border-top: 1px solid var(--background-modifier-border);
+  padding-top: 12px;
+  margin-top: 12px;
+}
+
 .word-learning-actions {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
   margin-top: 12px;
 }
-

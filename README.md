@@ -43,3 +43,12 @@ wordcli --vault ~/Documents/MyVault --json lookup precise --save
 
 Saved dictionary fields are recorded in `word_sources` so generated or imported content can be traced back to a provider.
 
+## Obsidian Plugin
+
+```bash
+pnpm pack:plugin
+```
+
+The plugin zip is written to `dist/obsidian-plugin/word-learning.zip`.
+
+The MVP plugin is desktop-only and provides a side panel for lookup, save-to-library, due review, and generated view refresh.

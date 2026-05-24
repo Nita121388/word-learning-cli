@@ -16,6 +16,7 @@ import type {
   SentenceInput,
   WordDetail,
   WordInput,
+  WordSource,
   WordStatus
 } from "./types.js";
 import { calculateSimpleSchedule } from "./review/simple-scheduler.js";
@@ -146,6 +147,31 @@ export class WordLearning {
     this.init();
     const row = this.getWordByNormalized(normalizeWord(word));
     return row ? this.toWordDetail(row) : null;
+  }
+
+  getWordSources(word: string): WordSource[] {
+    this.init();
+    const detail = this.requireWord(word);
+    return this.adapter.prepare(
+      `SELECT id, provider, field_name, license, url, fetched_at
+       FROM word_sources
+       WHERE word_id = ?
+       ORDER BY fetched_at DESC`
+    ).all<{
+      id: string;
+      provider: string;
+      field_name: string;
+      license: string | null;
+      url: string | null;
+      fetched_at: string;
+    }>(detail.id).map((row) => ({
+      id: row.id,
+      provider: row.provider,
+      fieldName: row.field_name,
+      license: row.license,
+      url: row.url,
+      fetchedAt: row.fetched_at
+    }));
   }
 
   updateWord(word: string, patch: Partial<WordInput>): WordDetail {

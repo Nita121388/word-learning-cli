@@ -13,6 +13,7 @@ export type {
   SentenceInput,
   WordDetail,
   WordInput,
+  WordSource,
   WordStatus
 } from "./types.js";
 export { ok, fail } from "./json-api.js";

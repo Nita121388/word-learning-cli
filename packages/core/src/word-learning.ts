@@ -10,11 +10,13 @@ import type {
   DueWord,
   EntityGraph,
   LookupResult,
+  LookupStats,
   MorphemeInput,
   Rating,
   ReviewResult,
   Schedule,
   SentenceInput,
+  WordCard,
   WordDetail,
   WordInput,
   WordSource,
@@ -56,6 +58,11 @@ interface ScheduleRow {
   ease: number | null;
   state_json: string | null;
   updated_at: string;
+}
+
+interface LookupEventRow {
+  count: number;
+  last_lookup_at: string | null;
 }
 
 export interface WordLearningOptions {
@@ -328,7 +335,7 @@ export class WordLearning {
     return result;
   }
 
-  async lookupWord(word: string, options: { save?: boolean; source?: LookupSource } = {}): Promise<LookupResult> {
+  async lookupWord(word: string, options: { save?: boolean; source?: LookupSource; recordLookup?: boolean } = {}): Promise<LookupResult> {
     this.init();
     const source = options.source ?? "ecdict";
     const entries: DictionaryEntry[] = [];
@@ -344,23 +351,83 @@ export class WordLearning {
     }
 
     const savedWord = options.save && entries[0] ? this.saveDictionaryEntry(entries[0]) : undefined;
-    const result: LookupResult = { word, entries, source };
+    const lookupStats =
+      options.recordLookup === false ? this.getLookupStats(word) : this.recordLookup(word, source, entries.length, savedWord?.id);
+    const result: LookupResult = { word, entries, source, lookupCount: lookupStats.lookupCount };
     if (savedWord) {
       result.savedWord = savedWord;
     }
     return result;
   }
 
-  lookupWordLocal(word: string, options: { save?: boolean } = {}): LookupResult {
+  lookupWordLocal(word: string, options: { save?: boolean; recordLookup?: boolean } = {}): LookupResult {
     this.init();
     const dictionary = new EcdictDictionary(this.dictionaryAdapter);
     const entries = dictionary.lookup(word);
     const savedWord = options.save && entries[0] ? this.saveDictionaryEntry(entries[0]) : undefined;
-    const result: LookupResult = { word, entries, source: "ecdict" };
+    const lookupStats =
+      options.recordLookup === false ? this.getLookupStats(word) : this.recordLookup(word, "ecdict", entries.length, savedWord?.id);
+    const result: LookupResult = { word, entries, source: "ecdict", lookupCount: lookupStats.lookupCount };
     if (savedWord) {
       result.savedWord = savedWord;
     }
     return result;
+  }
+
+  async getWordCard(word: string, options: { source?: LookupSource; recordLookup?: boolean } = {}): Promise<WordCard> {
+    this.init();
+    const source = options.source ?? "all";
+    const existing = this.getWord(word);
+    let entries: DictionaryEntry[] = [];
+    let lookupStats = this.getLookupStats(word);
+
+    if (existing == null) {
+      const lookupOptions: { source: LookupSource; recordLookup?: boolean } = { source };
+      if (options.recordLookup === false) {
+        lookupOptions.recordLookup = false;
+      }
+      const lookup = await this.lookupWord(word, lookupOptions);
+      entries = lookup.entries;
+      lookupStats = this.getLookupStats(word);
+    } else if (options.recordLookup !== false) {
+      lookupStats = this.recordLookup(word, "card", 0, existing.id);
+    }
+
+    const savedWord = this.getWord(word);
+    const bestEntry = entries[0] ?? wordDetailToDictionaryEntry(savedWord);
+    const audioUrl = savedWord?.audioUrl ?? bestEntry?.audioUrl ?? null;
+    const reviewCount = savedWord?.schedule?.reviewCount ?? 0;
+    return {
+      word,
+      normalizedWord: normalizeWord(word),
+      source,
+      savedWord,
+      entries,
+      bestEntry,
+      audioUrl,
+      isSaved: savedWord != null,
+      isFavorite: savedWord?.tags.includes("favorite") ?? false,
+      reviewCount,
+      lookupCount: lookupStats.lookupCount,
+      lastLookupAt: lookupStats.lastLookupAt,
+      generatedAt: nowIso()
+    };
+  }
+
+  getLookupStats(word: string): LookupStats {
+    this.init();
+    const normalized = normalizeWord(word);
+    const row = this.adapter.prepare(
+      `SELECT COUNT(*) as count, MAX(looked_up_at) as last_lookup_at
+       FROM lookup_events
+       WHERE normalized_word = ?`
+    ).get<LookupEventRow>(normalized);
+    return {
+      word,
+      normalizedWord: normalized,
+      lookupCount: row?.count ?? 0,
+      lastLookupAt: row?.last_lookup_at ?? null
+    };
   }
 
   getDueWords(options: { now?: Date; limit?: number; tag?: string } = {}): DueWord[] {
@@ -620,6 +687,7 @@ export class WordLearning {
       source: row.source,
       personalNote: row.personal_note,
       aiNote: row.ai_note,
+      audioUrl: this.getLatestWordSourceValue(row.id, "audio_url"),
       status: row.status,
       createdAt: row.created_at,
       updatedAt: row.updated_at,
@@ -635,6 +703,34 @@ export class WordLearning {
        WHERE wt.word_id = ?
        ORDER BY t.name ASC`
     ).all<{ name: string }>(wordId).map((row) => row.name);
+  }
+
+  private getLatestWordSourceValue(wordId: string, fieldName: string): string | null {
+    const row = this.adapter.prepare(
+      `SELECT raw_json FROM word_sources
+       WHERE word_id = ? AND field_name = ?
+       ORDER BY fetched_at DESC
+       LIMIT 1`
+    ).get<{ raw_json: string }>(wordId, fieldName);
+    if (!row?.raw_json) {
+      return null;
+    }
+    try {
+      const raw = JSON.parse(row.raw_json) as { audioUrl?: unknown };
+      return typeof raw.audioUrl === "string" && raw.audioUrl.length > 0 ? raw.audioUrl : null;
+    } catch {
+      return null;
+    }
+  }
+
+  private recordLookup(word: string, source: string, resultCount: number, savedWordId?: string): LookupStats {
+    const normalized = normalizeWord(word);
+    const at = nowIso();
+    this.adapter.prepare(
+      `INSERT INTO lookup_events (id, normalized_word, word, source, result_count, saved_word_id, looked_up_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`
+    ).run(createId("lookup"), normalized, word, source, resultCount, savedWordId ?? null, at);
+    return this.getLookupStats(word);
   }
 
   private getSchedule(wordId: string): Schedule | null {
@@ -709,7 +805,7 @@ export class WordLearning {
     this.recordFieldSource(detail.id, "part_of_speech", entry.provider, entry.pos, entry);
     this.recordFieldSource(detail.id, "example", entry.provider, entry.example, entry);
     this.recordFieldSource(detail.id, "audio_url", entry.provider, entry.audioUrl, entry);
-    return detail;
+    return this.requireWord(entry.word);
   }
 
   private recordFieldSource(wordId: string, fieldName: string, provider: string, value: string | null, raw: unknown): void {
@@ -797,4 +893,24 @@ export class WordLearning {
     }
     return input;
   }
+}
+
+function wordDetailToDictionaryEntry(word: WordDetail | null): DictionaryEntry | null {
+  if (!word) {
+    return null;
+  }
+  return {
+    word: word.word,
+    normalizedWord: word.normalizedWord,
+    phonetic: word.phonetic,
+    definition: word.meaningEn,
+    translation: word.meaningZh,
+    pos: word.partOfSpeech,
+    tags: word.tags,
+    exchange: null,
+    example: word.example,
+    audioUrl: word.audioUrl,
+    provider: word.source ?? "saved",
+    source: word.source
+  };
 }

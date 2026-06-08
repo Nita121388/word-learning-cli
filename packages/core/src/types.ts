@@ -31,6 +31,7 @@ export interface WordDetail {
   source: string | null;
   personalNote: string | null;
   aiNote: string | null;
+  audioUrl: string | null;
   status: WordStatus;
   createdAt: string;
   updatedAt: string;
@@ -112,6 +113,30 @@ export interface LookupResult {
   entries: DictionaryEntry[];
   source: string;
   savedWord?: WordDetail;
+  lookupCount?: number;
+}
+
+export interface LookupStats {
+  word: string;
+  normalizedWord: string;
+  lookupCount: number;
+  lastLookupAt: string | null;
+}
+
+export interface WordCard {
+  word: string;
+  normalizedWord: string;
+  source: string;
+  savedWord: WordDetail | null;
+  entries: DictionaryEntry[];
+  bestEntry: DictionaryEntry | null;
+  audioUrl: string | null;
+  isSaved: boolean;
+  isFavorite: boolean;
+  reviewCount: number;
+  lookupCount: number;
+  lastLookupAt: string | null;
+  generatedAt: string;
 }
 
 export interface WordSource {

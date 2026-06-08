@@ -1,6 +1,13 @@
 # Word Learning CLI
 
+[中文说明](README.zh-CN.md)
+
 Local-first English vocabulary learning system for CLI, AI agents, and Obsidian.
+
+The package installs two cross-platform commands:
+
+- `wl`: short daily command.
+- `wordcli`: full command name kept for compatibility and scripts.
 
 ## Architecture
 
@@ -24,16 +31,27 @@ pnpm --filter @word-learning/cli dev -- --help
 ## CLI Example
 
 ```bash
-wordcli init --vault ~/Documents/MyVault
-wordcli add precise --meaning-zh "精确的" --tag writing --vault ~/Documents/MyVault
-wordcli review due --vault ~/Documents/MyVault --json
+wl config set vault ~/Documents/MyVault
+wl setup
+wl doctor
+wl a precise --meaning-zh "精确的" --tag writing
+wl g precise
+wl card precise
+wl due
+```
+
+You can still override storage per command:
+
+```bash
+wl --vault ~/Documents/MyVault --json review due
+wl --db ~/.word-learning/user.sqlite get precise
 ```
 
 Use FSRS for newly added words:
 
 ```bash
-wordcli --vault ~/Documents/MyVault --review-algorithm fsrs_v1 add retain
-wordcli --vault ~/Documents/MyVault review answer retain --rating good
+wl --review-algorithm fsrs_v1 add retain
+wl review answer retain --rating good
 ```
 
 ## Dictionary Lookup
@@ -41,24 +59,37 @@ wordcli --vault ~/Documents/MyVault review answer retain --rating good
 Import a local ECDICT CSV file into the dictionary cache:
 
 ```bash
-wordcli --vault ~/Documents/MyVault dictionary import-ecdict /path/to/ecdict.csv
+wl dictionary import-ecdict /path/to/ecdict.csv
 ```
 
 Look up a word and save the first dictionary result into the learning database:
 
 ```bash
-wordcli --vault ~/Documents/MyVault --json lookup precise --save
+wl --json lookup precise --save
 ```
 
 Use the online Free Dictionary API:
 
 ```bash
-wordcli --vault ~/Documents/MyVault --json lookup hello --source free-dictionary
-wordcli --vault ~/Documents/MyVault --json lookup hello --source all --save
+wl --json lookup hello --source free-dictionary
+wl --json lookup hello --source all --save
 ```
 
 Saved dictionary fields are recorded in `word_sources` so generated or imported content can be traced back to a provider.
 Online entries can include an `audioUrl` for pronunciation playback.
+
+## App Integration
+
+External apps can use `doctor` and `card` for a small, stable integration surface:
+
+```bash
+wl --json doctor
+wl --json setup
+wl --json card hello --source all
+wl --json card hello --no-record-lookup
+```
+
+The card payload includes saved word data, dictionary entries, `audioUrl`, favorite status, `reviewCount`, `lookupCount`, and `aiNote`. Lookup counts are tracked separately from review counts.
 
 ## Obsidian Plugin
 

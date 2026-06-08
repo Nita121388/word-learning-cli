@@ -1,6 +1,22 @@
 #!/usr/bin/env node
 import { Command } from "commander";
-import { WordLearning, fail, ok, type LookupSource, type MorphemeInput, type Rating, type SentenceInput, type WordInput, type WordLearningOptions, type WordStatus } from "@word-learning/core";
+import { existsSync } from "node:fs";
+import { join } from "node:path";
+import {
+  WordLearning,
+  fail,
+  isNodeSqliteAvailable,
+  ok,
+  resolveVaultDbPath,
+  type LookupSource,
+  type MorphemeInput,
+  type Rating,
+  type SentenceInput,
+  type WordInput,
+  type WordLearningOptions,
+  type WordStatus
+} from "@word-learning/core";
+import { getConfigPath, getEnvStorage, parseConfigKey, readCliConfig, resolveStorage, resolveStorageOptions, setCliConfigValue, unsetCliConfigValue } from "./config.js";
 
 interface GlobalOptions {
   vault?: string;
@@ -11,9 +27,10 @@ interface GlobalOptions {
 
 function createApp(options: GlobalOptions): WordLearning {
   const appOptions: WordLearningOptions = {};
+  const resolvedOptions = resolveStorageOptions(options);
   const reviewAlgorithm = parseReviewAlgorithm(options.reviewAlgorithm);
-  if (options.vault !== undefined) appOptions.vaultPath = options.vault;
-  if (options.db !== undefined) appOptions.dbPath = options.db;
+  if (resolvedOptions.vault !== undefined) appOptions.vaultPath = resolvedOptions.vault;
+  if (resolvedOptions.db !== undefined) appOptions.dbPath = resolvedOptions.db;
   if (reviewAlgorithm !== undefined) appOptions.reviewAlgorithm = reviewAlgorithm;
   return new WordLearning(appOptions);
 }
@@ -62,6 +79,29 @@ function parseReviewAlgorithm(value: string | undefined): string | undefined {
   throw new Error(`invalid review algorithm: ${value}`);
 }
 
+function makeDoctorResult(options: GlobalOptions): Record<string, unknown> {
+  const configPath = getConfigPath();
+  const active = resolveStorage(options, process.env, configPath);
+  const dbPath = active.db ?? (active.vault ? resolveVaultDbPath(active.vault) : join(process.cwd(), ".word-learning", "user.sqlite"));
+  const sqliteAvailable = isNodeSqliteAvailable();
+  const checks = {
+    nodeSqlite: sqliteAvailable,
+    storageConfigured: active.source !== "cwd",
+    dbExists: existsSync(dbPath),
+    vaultExists: active.vault ? existsSync(active.vault) : null
+  };
+  const ok = checks.nodeSqlite && checks.dbExists;
+  return {
+    ok,
+    version: "0.1.4",
+    node: process.version,
+    configPath,
+    active,
+    dbPath: dbPath ?? null,
+    checks
+  };
+}
+
 const program = new Command();
 
 program
@@ -72,6 +112,60 @@ program
   .option("--db <path>", "SQLite database path")
   .option("--review-algorithm <algorithm>", "simple_v1 | fsrs_v1")
   .option("--json", "print machine-readable JSON");
+
+const config = program.command("config").description("manage default CLI configuration");
+
+config
+  .command("show")
+  .description("show default CLI configuration and active storage")
+  .action(() => {
+    const options = program.opts<GlobalOptions>();
+    try {
+      const configPath = getConfigPath();
+      const result = {
+        configPath,
+        config: readCliConfig(configPath),
+        env: getEnvStorage(),
+        active: resolveStorage(options, process.env, configPath)
+      };
+      printResult(result, options.json);
+    } catch (error) {
+      handleError(error, options.json);
+    }
+  });
+
+config
+  .command("set")
+  .argument("<key>", "db | vault")
+  .argument("<value>")
+  .description("set default db or vault path")
+  .action((key: string, value: string) => {
+    const options = program.opts<GlobalOptions>();
+    try {
+      const parsedKey = parseConfigKey(key);
+      const configPath = getConfigPath();
+      const saved = setCliConfigValue(parsedKey, value, configPath);
+      printResult({ configPath, config: saved }, options.json);
+    } catch (error) {
+      handleError(error, options.json);
+    }
+  });
+
+config
+  .command("unset")
+  .argument("<key>", "db | vault")
+  .description("remove default db or vault path")
+  .action((key: string) => {
+    const options = program.opts<GlobalOptions>();
+    try {
+      const parsedKey = parseConfigKey(key);
+      const configPath = getConfigPath();
+      const saved = unsetCliConfigValue(parsedKey, configPath);
+      printResult({ configPath, config: saved }, options.json);
+    } catch (error) {
+      handleError(error, options.json);
+    }
+  });
 
 program
   .command("init")
@@ -89,7 +183,50 @@ program
   });
 
 program
+  .command("doctor")
+  .description("check wordcli runtime, storage, and database readiness")
+  .action(() => {
+    const options = program.opts<GlobalOptions>();
+    try {
+      printResult(makeDoctorResult(options), options.json);
+    } catch (error) {
+      handleError(error, options.json);
+    }
+  });
+
+program
+  .command("setup")
+  .description("initialize storage and return readiness information")
+  .option("--refresh-views", "refresh generated Obsidian views after setup")
+  .action((commandOptions: { refreshViews?: boolean }) => {
+    const options = program.opts<GlobalOptions>();
+    try {
+      const resolvedOptions = resolveStorageOptions(options);
+      const app = createApp(resolvedOptions);
+      app.init();
+      if (commandOptions.refreshViews === true) {
+        if (!resolvedOptions.vault) {
+          throw new Error("--vault or configured vault is required for setup --refresh-views");
+        }
+        app.refreshViews(resolvedOptions.vault);
+      }
+      app.close();
+      printResult(
+        {
+          initialized: true,
+          refreshedViews: commandOptions.refreshViews === true,
+          doctor: makeDoctorResult(options)
+        },
+        options.json
+      );
+    } catch (error) {
+      handleError(error, options.json);
+    }
+  });
+
+program
   .command("add")
+  .alias("a")
   .argument("<word>")
   .description("add or update a word")
   .option("--meaning-zh <text>")
@@ -99,6 +236,7 @@ program
   .option("--example <text>")
   .option("--source <text>")
   .option("--note <text>")
+  .option("--ai-note <text>")
   .option("--tag <tag>", "tag to add", collect, [])
   .action((word: string, commandOptions: Record<string, string | string[]>) => {
     const options = program.opts<GlobalOptions>();
@@ -112,6 +250,7 @@ program
       if (typeof commandOptions.example === "string") input.example = commandOptions.example;
       if (typeof commandOptions.source === "string") input.source = commandOptions.source;
       if (typeof commandOptions.note === "string") input.personalNote = commandOptions.note;
+      if (typeof commandOptions.aiNote === "string") input.aiNote = commandOptions.aiNote;
       if (Array.isArray(commandOptions.tag)) input.tags = commandOptions.tag;
       const result = app.addWord(input);
       app.close();
@@ -123,6 +262,7 @@ program
 
 program
   .command("get")
+  .alias("g")
   .argument("<word>")
   .description("get a word from the learning database")
   .action((word: string) => {
@@ -156,6 +296,43 @@ program
   });
 
 program
+  .command("card")
+  .argument("<word>")
+  .description("get UI-ready word card data")
+  .option("--source <source>", "ecdict | free-dictionary | all", "all")
+  .option("--no-record-lookup", "do not increment lookup count")
+  .action(async (word: string, commandOptions: { source: LookupSource; recordLookup: boolean }) => {
+    const options = program.opts<GlobalOptions>();
+    try {
+      const app = createApp(options);
+      const result = await app.getWordCard(word, {
+        source: commandOptions.source,
+        recordLookup: commandOptions.recordLookup !== false
+      });
+      app.close();
+      printResult(result, options.json);
+    } catch (error) {
+      handleError(error, options.json);
+    }
+  });
+
+program
+  .command("lookup-stats")
+  .argument("<word>")
+  .description("show lookup count and last lookup time for a word")
+  .action((word: string) => {
+    const options = program.opts<GlobalOptions>();
+    try {
+      const app = createApp(options);
+      const result = app.getLookupStats(word);
+      app.close();
+      printResult(result, options.json);
+    } catch (error) {
+      handleError(error, options.json);
+    }
+  });
+
+program
   .command("update")
   .argument("<word>")
   .description("update word fields")
@@ -166,6 +343,7 @@ program
   .option("--example <text>")
   .option("--source <text>")
   .option("--note <text>")
+  .option("--ai-note <text>")
   .option("--status <status>")
   .action((word: string, commandOptions: Record<string, string>) => {
     const options = program.opts<GlobalOptions>();
@@ -179,6 +357,7 @@ program
       if (commandOptions.example) patch.example = commandOptions.example;
       if (commandOptions.source) patch.source = commandOptions.source;
       if (commandOptions.note) patch.personalNote = commandOptions.note;
+      if (commandOptions.aiNote) patch.aiNote = commandOptions.aiNote;
       if (commandOptions.status) patch.status = parseStatus(commandOptions.status);
       const result = app.updateWord(word, patch);
       app.close();
@@ -259,21 +438,31 @@ tag
 
 const review = program.command("review").description("review words");
 
+function showDueWords(commandOptions: { limit: number; tag?: string }): void {
+  const options = program.opts<GlobalOptions>();
+  try {
+    const app = createApp(options);
+    const result = app.getDueWords(withDefined({ limit: commandOptions.limit, tag: commandOptions.tag }));
+    app.close();
+    printResult(result, options.json);
+  } catch (error) {
+    handleError(error, options.json);
+  }
+}
+
 review
   .command("due")
   .option("--limit <number>", "maximum due words", (value) => Number.parseInt(value, 10), 20)
   .option("--tag <tag>")
-  .action((commandOptions: { limit: number; tag?: string }) => {
-    const options = program.opts<GlobalOptions>();
-    try {
-      const app = createApp(options);
-      const result = app.getDueWords(withDefined({ limit: commandOptions.limit, tag: commandOptions.tag }));
-      app.close();
-      printResult(result, options.json);
-    } catch (error) {
-      handleError(error, options.json);
-    }
-  });
+  .action(showDueWords);
+
+program
+  .command("due")
+  .alias("d")
+  .description("show due review words")
+  .option("--limit <number>", "maximum due words", (value) => Number.parseInt(value, 10), 20)
+  .option("--tag <tag>")
+  .action(showDueWords);
 
 const dictionary = program.command("dictionary").description("manage local dictionary sources");
 
@@ -450,11 +639,12 @@ program
       if (action !== "refresh") {
         throw new Error(`unsupported views action: ${action}`);
       }
-      if (!options.vault) {
-        throw new Error("--vault is required for views refresh");
+      const resolvedOptions = resolveStorageOptions(options);
+      if (!resolvedOptions.vault) {
+        throw new Error("--vault or configured vault is required for views refresh");
       }
-      const app = createApp(options);
-      app.refreshViews(options.vault);
+      const app = createApp(resolvedOptions);
+      app.refreshViews(resolvedOptions.vault);
       app.close();
       printResult({ refreshed: true }, options.json);
     } catch (error) {

@@ -3,7 +3,8 @@
   "version": "0.1.4",
   "type": "module",
   "bin": {
-    "wordcli": "./dist/main.cjs"
+    "wordcli": "./dist/main.cjs",
+    "wl": "./dist/main.cjs"
   },
   "files": [
     "dist",

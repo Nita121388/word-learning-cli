@@ -77,6 +77,17 @@ CREATE TABLE IF NOT EXISTS word_sources (
   FOREIGN KEY (word_id) REFERENCES words(id) ON DELETE CASCADE
 );
 
+CREATE TABLE IF NOT EXISTS lookup_events (
+  id TEXT PRIMARY KEY,
+  normalized_word TEXT NOT NULL,
+  word TEXT NOT NULL,
+  source TEXT NOT NULL,
+  result_count INTEGER NOT NULL DEFAULT 0,
+  saved_word_id TEXT,
+  looked_up_at TEXT NOT NULL,
+  FOREIGN KEY (saved_word_id) REFERENCES words(id) ON DELETE SET NULL
+);
+
 CREATE TABLE IF NOT EXISTS sentences (
   id TEXT PRIMARY KEY,
   text TEXT NOT NULL,
@@ -154,6 +165,8 @@ CREATE INDEX IF NOT EXISTS idx_words_status ON words(status);
 CREATE INDEX IF NOT EXISTS idx_schedules_due ON schedules(due_at);
 CREATE INDEX IF NOT EXISTS idx_reviews_word ON reviews(word_id);
 CREATE INDEX IF NOT EXISTS idx_word_sources_word ON word_sources(word_id);
+CREATE INDEX IF NOT EXISTS idx_word_sources_field ON word_sources(word_id, field_name);
+CREATE INDEX IF NOT EXISTS idx_lookup_events_word ON lookup_events(normalized_word, looked_up_at);
 CREATE INDEX IF NOT EXISTS idx_sentence_words_word ON sentence_words(word_id);
 CREATE INDEX IF NOT EXISTS idx_word_morphemes_word ON word_morphemes(word_id);
 CREATE INDEX IF NOT EXISTS idx_relations_from ON relations(from_type, from_id);

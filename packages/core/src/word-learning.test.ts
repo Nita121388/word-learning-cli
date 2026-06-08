@@ -79,6 +79,42 @@ describe("WordLearning", () => {
     expect(lookup.entries[0]?.translation).toBe("精确的");
     expect(lookup.savedWord?.meaningZh).toBe("精确的");
     expect(lookup.savedWord?.tags).toContain("ielts");
+    expect(lookup.lookupCount).toBe(1);
+    app.close();
+  });
+
+  it("builds UI word cards with lookup stats, favorite state, and saved audio", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "word-learning-"));
+    dirs.push(dir);
+    const csv = join(dir, "ecdict.csv");
+    writeFileSync(
+      csv,
+      [
+        "word,phonetic,definition,translation,pos,collins,oxford,tag,bnc,frq,exchange,detail,audio",
+        "hello,həˈləʊ,used as a greeting,你好,int,1,1,basic,1000,1000,,,https://example.test/hello.mp3"
+      ].join("\n"),
+      "utf8"
+    );
+    const app = new WordLearning({
+      dbPath: join(dir, "user.sqlite"),
+      dictionaryDbPath: join(dir, "ecdict.sqlite")
+    });
+
+    await app.importEcdict(csv);
+    const lookup = await app.lookupWord("hello", { save: true });
+    app.addTags("hello", ["favorite"]);
+
+    const word = app.getWord("hello");
+    const card = await app.getWordCard("hello");
+
+    expect(lookup.savedWord?.audioUrl).toBe("https://example.test/hello.mp3");
+    expect(word?.audioUrl).toBe("https://example.test/hello.mp3");
+    expect(card.isSaved).toBe(true);
+    expect(card.isFavorite).toBe(true);
+    expect(card.reviewCount).toBe(0);
+    expect(card.lookupCount).toBe(2);
+    expect(card.bestEntry?.translation).toBe("你好");
+    expect(card.audioUrl).toBe("https://example.test/hello.mp3");
     app.close();
   });
 
